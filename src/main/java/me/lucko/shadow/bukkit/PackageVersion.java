@@ -25,9 +25,15 @@
 
 package me.lucko.shadow.bukkit;
 
+import com.vdurmont.semver4j.Semver;
 import org.bukkit.Bukkit;
+import org.bukkit.Server;
+import org.bukkit.UnsafeValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -204,17 +210,35 @@ public enum PackageVersion {
     private static final PackageVersion RUNTIME_VERSION;
 
     static {
-        String serverVersion = "";
-        // check we're dealing with a "CraftServer" and that the server isn't non-versioned.
-        Class<?> server = Bukkit.getServer().getClass();
-        if (server.getSimpleName().equals("CraftServer") && !server.getName().equals("org.bukkit.craftbukkit.CraftServer")) {
-            String obcPackage = server.getPackage().getName();
-            // check we're dealing with a craftbukkit implementation.
-            if (obcPackage.startsWith("org.bukkit.craftbukkit.")) {
-                // return the package version.
-                serverVersion = obcPackage.substring("org.bukkit.craftbukkit.".length());
+        Map<Integer, String> PROTOCOL_VERSION_PACKAGE_MAP = new HashMap<Integer, String>() {
+            private static final long serialVersionUID = -5188779509588704507L;
+            {
+                put(766, "v1_20_R4");
+                put(767, "v1_21_R1");
+                put(768, "v1_21_R2");
+            }
+        };
+
+        final String packageName = Bukkit.getServer().getClass().getPackage().getName();
+        String serverVersion = packageName.substring(packageName.lastIndexOf('.') + 1);
+
+        if (serverVersion.equals("craftbukkit")) {
+            try {
+                final String minecraftVersion = (String) Server.class.getDeclaredMethod("getMinecraftVersion").invoke(Bukkit.getServer());
+                final String normalizedVersion = minecraftVersion.matches("^\\d+\\.\\d+$") ? minecraftVersion + ".0" : minecraftVersion;
+
+                final Semver semver = new Semver(normalizedVersion);
+                if (semver.isGreaterThanOrEqualTo("1.20.5")) {
+                    @SuppressWarnings("deprecation")
+                    final int protocolVersion = (Integer) UnsafeValues.class.getDeclaredMethod("getProtocolVersion")
+                            .invoke(Bukkit.getUnsafe());
+                    serverVersion = PROTOCOL_VERSION_PACKAGE_MAP.get(protocolVersion);
+                }
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+                e.printStackTrace();
             }
         }
+
         RUNTIME_VERSION_STRING = serverVersion;
 
         PackageVersion runtimeVersion = null;
