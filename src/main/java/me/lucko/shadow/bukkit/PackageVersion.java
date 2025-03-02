@@ -216,6 +216,7 @@ public enum PackageVersion {
                 put(766, "v1_20_R4");
                 put(767, "v1_21_R1");
                 put(768, "v1_21_R2");
+                put(769, "v1_21_R3");
             }
         };
 
